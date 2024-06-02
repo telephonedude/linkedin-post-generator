@@ -1,0 +1,143 @@
+// Constants
+//Enter your api key here
+const API_KEY = "enter-your-API-key-here";
+const MODEL_TYPE = "gpt-3.5-turbo"; //chatGPT model
+const BASE_URL = "https://api.openai.com/v1/chat/completions";
+
+
+// Creates a custom menu in Google Docs
+function onOpen() {
+  SlidesApp.getUi().createMenu("Post Generator")
+      .addItem("Generate Linkedin Post", "generateIdeas")
+      .addToUi();
+}
+
+// Deselect all items to prevent errors
+function deselectItems(presentation){
+    var slide = presentation.getSlides()[0]; // Use the first slide (or any specific slide)
+
+    // Create a small placeholder shape (if not already existing)
+    var placeholderShape;
+    var shapes = slide.getShapes();
+    for (var i = 0; i < shapes.length; i++) {
+      if (shapes[i].getTitle() === 'PlaceholderShape') {
+        placeholderShape = shapes[i];
+        break;
+      }
+    }
+
+    // If the placeholder shape doesn't exist, create it
+    if (!placeholderShape) {
+      placeholderShape = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, 0, 0, 1, 1);
+      placeholderShape.setTitle('PlaceholderShape');
+      let aColour = "#E4002B";
+      placeholderShape.getFill().setSolidFill(aColour,0.95);
+    }
+    // Select the placeholder shape
+    placeholderShape.select();
+
+    // Optionally, deselect the placeholder shape to leave nothing selected
+    slide.selectAsCurrentPage(); // This deselects the shape, leaving nothing selected
+}
+
+
+// Generates prompt based on the selected text and adds it to the document
+function generateIdeas() {
+  //open your slide here
+  var presentation = SlidesApp.openById(/*enter your slide id  here*/);
+  deselectItems(presentation);
+  // var presentation = SlidesApp.getActivePresentation();
+  var imageDescriptions = [];
+  var slides = presentation.getSlides();
+
+  //loop start
+  for (var i = 0; i < slides.length; i++) {
+    var slide = slides[i];
+    var pageElements = slide.getPageElements();
+    
+    // Iterate through each element on the slide
+    for (var j = 0; j < pageElements.length; j++) {
+      var element = pageElements[j];
+      
+      // Check if the element is an image
+      if (element.getPageElementType() == SlidesApp.PageElementType.IMAGE) {
+        var image = element.asImage();
+        // var encodedImage = Utilities.base64Encode(image.getBlob().getBytes());
+        // image.replace(encodedImage);
+        var imageUrl = image.getContentUrl();
+        Logger.log('Image found: ' + imageUrl);
+          
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${API_KEY}`
+        };
+        const options = {
+            headers,
+            method: "GET",
+            muteHttpExceptions: true,
+              payload: JSON.stringify({
+              "model": "gpt-4o",
+              "messages": [{
+                "role": "user",
+                "content":  [
+                      {
+                        "type": "text", 
+                        "text": "Check the image and return an extremely super vague prompt on how to get the same energy from the post, ignore engagements and ignore reactions"
+                      },
+                      {
+                          "type": "image_url",
+                          "image_url": {
+                            "url": imageUrl,
+                            "detail" : "high"
+                          },
+                      },
+                  ],
+              }],
+              "temperature": 0.5
+            })
+        }
+
+        const response = JSON.parse(UrlFetchApp.fetch(BASE_URL, options));
+        console.log("Returned Prompt: " + response.choices[0].message.content);
+        imageDescriptions.push(response.choices[0].message.content);
+      }
+    }
+  }
+  //loop end
+  // const selectedText = doc.getSelection().getRangeElements()[0].getElement().asText().getText();
+  // const body = doc.getBody();
+    for (var j = 0; j < imageDescriptions.length; j++) {
+      
+      var slides = presentation.getSlides();
+      const prompt = "Help me write 5 Linkedin post on " + imageDescriptions[j];
+      const temperature = 0;
+      const maxTokens = 2060;
+
+      const requestBody = {
+        model: MODEL_TYPE,
+        messages: [{role: "user", content: prompt}],
+        temperature,
+        max_tokens: maxTokens,
+      };
+
+      const requestOptions = {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + API_KEY,
+        },
+        payload: JSON.stringify(requestBody),
+      };
+
+
+      const response = UrlFetchApp.fetch(BASE_URL, requestOptions);
+      const responseText = response.getContentText();
+      const json = JSON.parse(responseText);
+      const generatedText = json['choices'][0]['message']['content'];
+      Logger.log(generatedText);
+
+      //add new
+      var slide1 = presentation.insertSlide(slides.length);
+      slide1.insertTextBox(generatedText.replace(/^(?=\n)$|^\s*|\s*$|\n\n+/gm,""),0,0,670,500);
+    }
+}
